@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from logger import logger
 from config import BUFFER_SIZE, CONNECTION_TIMEOUT
 from utils import parse_http_header, extract_host_port, create_connection, send_data, receive_data, close_connection
+from cache import cache
 
 class ProxyHandler:
     def __init__(self, client_socket, client_address):
@@ -72,18 +73,60 @@ class ProxyHandler:
             logger.error(f"Error handling HTTPS request: {e}")
 
     def handle_http_request(self, method, url, version, headers, request):
+        cache_key = f"{method}:{url}"
+        cached_response = cache.get(cache_key)
+
+        if cached_response:
+            logger.info(f"Cache hit for {url}")
+            self.send_cached_response(cached_response)
+            return
+
         host, port = extract_host_port(url)
         try:
             self.target_socket = create_connection(host, port)
             if not self.target_socket:
                 return
 
-            modified_request = self.modify_request(request, headers) # Request modification
+            modified_request = self.modify_request(request, headers)
             send_data(self.target_socket, modified_request)
             
-            self.forward_response()
+            response = self.receive_response()
+            if self.is_cacheable(method, response):
+                cache.set(cache_key, response)
+            
+            self.forward_response(response)
         except Exception as e:
             logger.error(f"Error handling HTTP request: {e}")
+
+    def receive_response(self):
+        response = b''
+        while True:
+            chunk = receive_data(self.target_socket, BUFFER_SIZE)
+            if not chunk:
+                break
+            response += chunk
+        return response
+
+    def forward_response(self, response):
+        send_data(self.client_socket, response)
+
+    def send_cached_response(self, response):
+        send_data(self.client_socket, response)
+
+    def is_cacheable(self, method, response):
+        if method != 'GET':
+            return False
+        
+        headers = parse_http_header(response.split(b'\r\n\r\n')[0].decode('utf-8'))
+        cache_control = headers.get('cache-control', '').lower()
+        
+        if 'no-store' in cache_control or 'private' in cache_control:
+            return False
+        if 'max-age=0' in cache_control:
+            return False
+        
+        return True
+
 
     def modify_request(self, request, headers):
         request_lines = request.decode('utf-8').split('\r\n')
