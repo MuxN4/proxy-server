@@ -20,6 +20,10 @@ def setup_logger(name = "proxy_server"):
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
 
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+
     return logger
 
 logger = setup_logger()
