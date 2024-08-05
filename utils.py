@@ -2,7 +2,7 @@ import socket
 from urllib.parse import urlparse
 from logger import logger
 
-def pasre_http_header(header): # Skips the first line
+def parse_http_header(header): # Skips the first line
     header_lines = header.split("\r\n")
     parsed_header = {}
     for line in header_lines[1:]:
