@@ -13,7 +13,9 @@ This project creates a basic proxy server in Python. It acts as a middleman for 
 ## Installation
 
 1. Clone this repository 
-
+```sh
+    git clone https://github.com/MuxN4/proxy-server.git
+```
 
 2. No additional dependencies are required as the script uses Python  standard libraries.
 
@@ -35,7 +37,7 @@ This project creates a basic proxy server in Python. It acts as a middleman for 
 5. To test using curl:
 
 ```sh
-curl -v -x http://localhost:8080 http://example.com
+    curl -v -x http://localhost:8080 http://example.com
 ```
 
 ## Configuration
