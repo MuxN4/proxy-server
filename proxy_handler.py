@@ -14,9 +14,10 @@ class ProxyHandler:
 
     def handle_client_request(self):
         try:
-            self.client_socket.settimeout(CONNECTION_TIMEOUT) # Timeout handling
+            self.client_socket.settimeout(CONNECTION_TIMEOUT)
             request = self.receive_client_request()
             if not request:
+                logger.warning("Received empty request")
                 return
 
             method, url, version, headers = self.parse_request(request)
@@ -30,6 +31,7 @@ class ProxyHandler:
             logger.warning(f"Connection from {self.client_address} timed out")
         except Exception as e:
             logger.error(f"Error handling request from {self.client_address}: {e}")
+            logger.exception("Exception details:")
         finally:
             self.close_connections()
 
@@ -40,9 +42,9 @@ class ProxyHandler:
             if not chunk:
                 break
             request += chunk
+        logger.debug(f"Received raw request: {request[:100]}...")  # Log the first 100 bytes
         return request
 
-    # Enhanced parse_request to now handle full URLS and relative URLS
     def parse_request(self, request):
         try:
             request_lines = request.decode('utf-8').split('\r\n')
@@ -65,12 +67,14 @@ class ProxyHandler:
         try:
             self.target_socket = create_connection(host, port)
             if not self.target_socket:
+                logger.error(f"Failed to create connection to {host}:{port}")
                 return
 
             self.client_socket.send(b'HTTP/1.1 200 Connection Established\r\n\r\n')
             self.tunnel_traffic(self.client_socket, self.target_socket)
         except Exception as e:
             logger.error(f"Error handling HTTPS request: {e}")
+            logger.exception("Exception details:")
 
     def handle_http_request(self, method, url, version, headers, request):
         cache_key = f"{method}:{url}"
@@ -85,18 +89,24 @@ class ProxyHandler:
         try:
             self.target_socket = create_connection(host, port)
             if not self.target_socket:
+                logger.error(f"Failed to create connection to {host}:{port}")
                 return
 
             modified_request = self.modify_request(request, headers)
             send_data(self.target_socket, modified_request)
             
             response = self.receive_response()
+            if not response:
+                logger.error("Received empty response from target server")
+                return
+
             if self.is_cacheable(method, response):
                 cache.set(cache_key, response)
             
             self.forward_response(response)
         except Exception as e:
             logger.error(f"Error handling HTTP request: {e}")
+            logger.exception("Exception details:")
 
     def receive_response(self):
         response = b''
@@ -105,13 +115,22 @@ class ProxyHandler:
             if not chunk:
                 break
             response += chunk
+        logger.debug(f"Received response: {response[:100]}...")  # Log the first 100 bytes
         return response
 
     def forward_response(self, response):
-        send_data(self.client_socket, response)
+        try:
+            send_data(self.client_socket, response)
+            logger.info("Response forwarded to client")
+        except Exception as e:
+            logger.error(f"Error forwarding response to client: {e}")
 
     def send_cached_response(self, response):
-        send_data(self.client_socket, response)
+        try:
+            send_data(self.client_socket, response)
+            logger.info("Cached response sent to client")
+        except Exception as e:
+            logger.error(f"Error sending cached response to client: {e}")
 
     def is_cacheable(self, method, response):
         if method != 'GET':
@@ -126,7 +145,6 @@ class ProxyHandler:
             return False
         
         return True
-
 
     def modify_request(self, request, headers):
         request_lines = request.decode('utf-8').split('\r\n')
@@ -144,12 +162,6 @@ class ProxyHandler:
         
         modified_request = '\r\n'.join([request_lines[0]] + filtered_headers + ['', ''])
         return modified_request.encode('utf-8')
-
-    def forward_response(self):
-        response = receive_data(self.target_socket, BUFFER_SIZE)
-        while response:
-            send_data(self.client_socket, response)
-            response = receive_data(self.target_socket, BUFFER_SIZE)
 
     def tunnel_traffic(self, client_socket, server_socket):
         def forward(source, destination):
@@ -175,6 +187,7 @@ class ProxyHandler:
         close_connection(self.client_socket)
         if self.target_socket:
             close_connection(self.target_socket)
+        logger.info("Connections closed")
 
 def run_proxy(host, port):
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
