@@ -62,8 +62,5 @@ The proxy server uses Python's logging module to provide detailed logs. By defau
 ## Contributing
 Contributions are welcome to improve the proxy server. Feel free to submit pull requests or open issues to discuss potential improvements.
 
-## License
-[Specify your chosen license here, e.g., MIT, GPL, etc.]
-
 ## Disclaimer
 This proxy server is a basic implementation. It may not be suitable for production environments without further enhancements and security considerations.
